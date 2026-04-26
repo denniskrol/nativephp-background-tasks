@@ -1,0 +1,50 @@
+{
+  "name": "projectmata/mobile-background-tasks",
+  "display_name": "Projectmata Background Tasks",
+  "namespace": "BackgroundTasks",
+  "bridge_functions": [
+    {
+      "name": "BackgroundTasks.Register",
+      "android": "com.projectmata.mobilebackgroundtasks.BackgroundTasksPlugin.Register",
+      "ios": "BackgroundTasksPlugin.Register"
+    },
+    {
+      "name": "BackgroundTasks.RunNow",
+      "android": "com.projectmata.mobilebackgroundtasks.BackgroundTasksPlugin.RunNow",
+      "ios": "BackgroundTasksPlugin.RunNow"
+    },
+    {
+      "name": "BackgroundTasks.Cancel",
+      "android": "com.projectmata.mobilebackgroundtasks.BackgroundTasksPlugin.Cancel",
+      "ios": "BackgroundTasksPlugin.Cancel"
+    },
+    {
+      "name": "BackgroundTasks.GetRegistered",
+      "android": "com.projectmata.mobilebackgroundtasks.BackgroundTasksPlugin.GetRegistered",
+      "ios": "BackgroundTasksPlugin.GetRegistered"
+    }
+  ],
+  "android": {
+    "min_version": 33,
+    "permissions": [
+      "android.permission.RECEIVE_BOOT_COMPLETED"
+    ],
+    "dependencies": {
+      "implementation": [
+        "androidx.work:work-runtime-ktx:2.9.1"
+      ]
+    }
+  },
+  "ios": {
+    "min_version": "16.0",
+    "info_plist": {
+      "BGTaskSchedulerPermittedIdentifiers": [
+        "com.projectmata.task.*"
+      ],
+      "UIBackgroundModes": [
+        "fetch",
+        "processing"
+      ]
+    }
+  }
+}
