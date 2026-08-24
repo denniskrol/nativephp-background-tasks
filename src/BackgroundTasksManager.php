@@ -2,17 +2,21 @@
 
 namespace Projectmata\MobileBackgroundTasks;
 
+use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Console\Scheduling\Schedule;
 
 class BackgroundTasksManager
 {
-    public function __construct(private readonly Schedule $schedule)
+    public function __construct(
+        private readonly Schedule $schedule,
+        private readonly Kernel $consoleKernel,
+    )
     {
     }
 
     public function register(): mixed
     {
-        $tasks = (new TaskCollector($this->schedule))->collect();
+        $tasks = $this->tasks();
 
         return $this->callNative('BackgroundTasks.Register', [
             'tasks' => $tasks,
@@ -38,6 +42,21 @@ class BackgroundTasksManager
 
     public function tasks(): array
     {
+        // NativePHP normally boots Laravel through the HTTP kernel, which does
+        // not load routes/console.php. Bootstrap the console kernel before
+        // inspecting the schedule so device-side registration sees its tasks.
+        $this->consoleKernel->bootstrap();
+
+        // The app may already have been bootstrapped by NativePHP's HTTP
+        // runtime, in which case Laravel skips the `withRouting(commands: …)`
+        // callback. Load the conventional schedule file explicitly; require_once
+        // keeps repeated component renders from adding duplicate events.
+        $consoleRoutes = base_path('routes/console.php');
+
+        if (is_file($consoleRoutes)) {
+            require_once $consoleRoutes;
+        }
+
         return (new TaskCollector($this->schedule))->collect();
     }
 

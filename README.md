@@ -6,14 +6,13 @@
 
 Background task scheduling plugin for [NativePHP Mobile](https://nativephp.com). Lets you define recurring jobs with Laravel's standard scheduler and run them via Android **WorkManager** and iOS **BGTaskScheduler** — even when the app is backgrounded or killed.
 
-> **Heads-up — native runtime hookup required.**
-> The PHP, JS, and bridge layers are fully wired. The Android `BackgroundTasksWorker` and iOS `BGTaskScheduler` handlers ship as stubs — you'll fill those in to invoke your bundled artisan commands. See [Native integration](#native-integration).
+> Android is fully implemented for NativePHP Mobile `^4.2`. The iOS handler remains a stub.
 
 ## Requirements
 
-- PHP `^8.1`
+- PHP `^8.4`
 - Laravel `^11.0` or `^12.0` / `^13.0`
-- `nativephp/mobile`
+- `nativephp/mobile ^4.2`
 - Android: `min_version 33` (uses `androidx.work:work-runtime-ktx`)
 - iOS: `min_version 16.0`
 
@@ -23,7 +22,7 @@ Background task scheduling plugin for [NativePHP Mobile](https://nativephp.com).
 composer require projectmata/mobile-background-tasks
 ```
 
-Laravel auto-discovery registers the service provider, the facade, the schedule constraint macros, and the artisan command. Then rebuild the mobile app:
+Enable the package in your app's `NativeServiceProvider::plugins()` list, then rebuild the mobile app:
 
 ```bash
 php artisan native:run android
@@ -55,13 +54,15 @@ Schedule::command('export:reports')
     ->longRunning();
 ```
 
-After defining tasks, push them to the native runtime:
+After defining tasks, call the PHP API from code running in the mobile app to push them to Android:
 
-```bash
-php artisan projectmata:background-tasks:register
+```php
+use Projectmata\MobileBackgroundTasks\Facades\BackgroundTasks;
+
+BackgroundTasks::register();
 ```
 
-This walks the schedule, serialises each periodic event into a task descriptor, and calls the `BackgroundTasks.Register` bridge function.
+This walks the schedule, serialises each periodic event into a task descriptor, and calls the `BackgroundTasks.Register` bridge function. Registration is explicit for now; invoke it after changing scheduled tasks, for example from your app's first native screen. The `projectmata:background-tasks:register` command cannot register Android work from the development machine.
 
 ## Constraint methods
 
@@ -142,7 +143,9 @@ const { tasks } = await window.NativePHP.BackgroundTasks.GetRegistered();
 
 ### Android
 
-This package declares `androidx.work:work-runtime-ktx:2.9.1`. The `Register` bridge function enqueues a `PeriodicWorkRequest` per task with the right `Constraints`, but the worker itself (`BackgroundTasksWorker.doWork()`) is a stub. Replace the body with code that invokes the bundled artisan command on the embedded NativePHP runtime — typically by calling into the same PHP runner that powers the rest of your NativePHP app.
+This package declares `androidx.work:work-runtime-ktx:2.9.1`. The `Register` bridge function enqueues a `PeriodicWorkRequest` per task with the right `Constraints`. When WorkManager runs a task, the package worker initializes NativePHP's background environment, boots an ephemeral PHP runtime, executes the bundled artisan command, and shuts the runtime down. No host-app Kotlin code is required.
+
+`RunNow` enqueues one unconstrained one-time execution per registered task. Registered task descriptors are persisted in app-private storage, so `GetRegistered` and `RunNow` remain available after a cold start.
 
 ### iOS
 

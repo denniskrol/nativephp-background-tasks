@@ -3,24 +3,39 @@ package com.projectmata.mobilebackgroundtasks
 import androidx.fragment.app.FragmentActivity
 import androidx.work.Constraints
 import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
+import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
+import androidx.work.workDataOf
 import com.nativephp.mobile.bridge.BridgeFunction
 import com.nativephp.mobile.bridge.BridgeResponse
 import com.nativephp.mobile.bridge.BridgeError
+import com.nativephp.mobile.bridge.LaravelEnvironment
+import com.nativephp.mobile.bridge.PHPBridge
+import org.json.JSONArray
+import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 
 /**
  * Background tasks bridge plugin.
  *
  * Uses WorkManager periodic work to run tasks at the requested cadence.
- * The actual execution of each `command` (e.g. `sync:data`) must be wired
- * up in your app's `BackgroundTasksWorker` — see the TODO blocks below.
+ * Uses NativePHP's ephemeral runtime so WorkManager can execute commands when
+ * Android starts the app in a background-only process.
  */
 class BackgroundTasksPlugin {
 
     companion object {
+        private const val TASK_TAG = "com.projectmata.mobilebackgroundtasks"
+        private const val PREFERENCES = "com.projectmata.mobilebackgroundtasks.tasks"
+        private const val TASKS_KEY = "tasks"
+        private const val RUN_NOW_SUFFIX = ".run-now"
+        private val taskIdPattern = Regex("[A-Za-z0-9._-]+")
+
+        private data class Task(val id: String, val command: String, val intervalMinutes: Long, val constraints: Map<String, Any?>)
+
         private fun makeError(code: String, message: String): BridgeError {
             val ctor = BridgeError::class.java.getDeclaredConstructor(
                 String::class.java,
@@ -46,45 +61,129 @@ class BackgroundTasksPlugin {
 
             return builder.build()
         }
+
+        private fun parseTask(raw: Map<String, Any?>): Task? {
+            val id = raw["id"]?.toString()?.takeIf { taskIdPattern.matches(it) } ?: return null
+            val command = raw["command"]?.toString()?.trim()
+                ?.takeIf {
+                    it.isNotEmpty() && !it.contains('\n') && !it.contains('\r') &&
+                        !it.contains('\'') && !it.contains('\\')
+                }
+                ?: return null
+            val interval = (raw["intervalMinutes"] as? Number)?.toLong()?.takeIf { it >= 15 } ?: return null
+
+            @Suppress("UNCHECKED_CAST")
+            val constraints = raw["constraints"] as? Map<String, Any?> ?: emptyMap()
+
+            return Task(id, command, interval, constraints)
+        }
+
+        private fun parseTasks(value: Any?): List<Task> {
+            val array = value as? JSONArray ?: return emptyList()
+
+            return buildList {
+                for (index in 0 until array.length()) {
+                    val raw = array.optJSONObject(index)
+                        ?: throw IllegalArgumentException("Each task must be an object.")
+                    val constraints = raw.optJSONObject("constraints")
+                    add(parseTask(mapOf(
+                        "id" to raw.opt("id"),
+                        "command" to raw.opt("command"),
+                        "intervalMinutes" to raw.opt("intervalMinutes"),
+                        "constraints" to buildMap {
+                            constraints?.let { json ->
+                                val keys = json.keys()
+                                while (keys.hasNext()) {
+                                    val key = keys.next()
+                                    put(key, json.opt(key))
+                                }
+                            }
+                        },
+                    )) ?: throw IllegalArgumentException("Each task needs a valid id, command, and interval of at least 15 minutes."))
+                }
+            }
+        }
+
+        private fun inputData(task: Task) = workDataOf("command" to task.command, "taskId" to task.id)
+
+        private fun loadTasks(context: android.content.Context): List<Task> {
+            val serialized = context.getSharedPreferences(PREFERENCES, android.content.Context.MODE_PRIVATE)
+                .getString(TASKS_KEY, "[]")
+                ?: "[]"
+
+            return try {
+                val array = JSONArray(serialized)
+                buildList {
+                    for (index in 0 until array.length()) {
+                        val objectTask = array.getJSONObject(index)
+                        val id = objectTask.optString("id")
+                        val command = objectTask.optString("command")
+                        val interval = objectTask.optLong("intervalMinutes")
+                        if (taskIdPattern.matches(id) && command.isNotBlank() && interval >= 15) {
+                            add(Task(id, command, interval, emptyMap()))
+                        }
+                    }
+                }
+            } catch (_: Exception) {
+                emptyList()
+            }
+        }
+
+        private fun saveTasks(context: android.content.Context, tasks: List<Task>) {
+            val array = JSONArray()
+            tasks.forEach { task ->
+                array.put(JSONObject().apply {
+                    put("id", task.id)
+                    put("command", task.command)
+                    put("intervalMinutes", task.intervalMinutes)
+                })
+            }
+
+            context.getSharedPreferences(PREFERENCES, android.content.Context.MODE_PRIVATE)
+                .edit()
+                .putString(TASKS_KEY, array.toString())
+                .apply()
+        }
+
+        private fun removeTask(context: android.content.Context, taskId: String) {
+            saveTasks(context, loadTasks(context).filterNot { it.id == taskId })
+        }
     }
 
     class Register(private val activity: FragmentActivity) : BridgeFunction {
         override fun execute(parameters: Map<String, Any>): Map<String, Any> {
             return try {
-                @Suppress("UNCHECKED_CAST")
-                val tasks = parameters["tasks"] as? List<Map<String, Any>> ?: emptyList()
+                val tasks = parseTasks(parameters["tasks"])
+                val duplicateIds = tasks.groupingBy { it.id }.eachCount().filterValues { it > 1 }
+                require(duplicateIds.isEmpty()) { "Task IDs must be unique." }
 
                 val workManager = WorkManager.getInstance(activity)
+                val existingTaskIds = loadTasks(activity).map { it.id }.toSet()
+                val registeredTaskIds = tasks.map { it.id }.toSet()
 
                 tasks.forEach { task ->
-                    val taskId = task["id"]?.toString() ?: return@forEach
-                    val command = task["command"]?.toString() ?: return@forEach
-                    val intervalMinutes = (task["intervalMinutes"] as? Number)?.toLong() ?: 15L
-
-                    @Suppress("UNCHECKED_CAST")
-                    val constraintsMap = task["constraints"] as? Map<String, Any?> ?: emptyMap()
-
-                    // TODO: replace BackgroundTasksWorker::class with your app's worker
-                    // that knows how to invoke the Laravel `command` on the embedded runtime.
                     val request = PeriodicWorkRequestBuilder<BackgroundTasksWorker>(
-                        intervalMinutes, TimeUnit.MINUTES
+                        task.intervalMinutes, TimeUnit.MINUTES
                     )
-                        .setConstraints(buildConstraints(constraintsMap))
-                        .addTag(taskId)
-                        .setInputData(
-                            androidx.work.workDataOf(
-                                "command" to command,
-                                "taskId" to taskId
-                            )
-                        )
+                        .setConstraints(buildConstraints(task.constraints))
+                        .addTag(TASK_TAG)
+                        .addTag(task.id)
+                        .setInputData(inputData(task))
                         .build()
 
                     workManager.enqueueUniquePeriodicWork(
-                        taskId,
+                        task.id,
                         ExistingPeriodicWorkPolicy.UPDATE,
                         request
                     )
                 }
+
+                (existingTaskIds - registeredTaskIds).forEach { taskId ->
+                    workManager.cancelUniqueWork(taskId)
+                    workManager.cancelUniqueWork(taskId + RUN_NOW_SUFFIX)
+                }
+                saveTasks(activity, tasks)
+                android.util.Log.i("BackgroundTasks", "Registered ${tasks.size} background task(s): ${tasks.joinToString { it.id }}")
 
                 BridgeResponse.success(
                     mapOf<String, Any>(
@@ -102,13 +201,37 @@ class BackgroundTasksPlugin {
 
     class RunNow(private val activity: FragmentActivity) : BridgeFunction {
         override fun execute(parameters: Map<String, Any>): Map<String, Any> {
-            // TODO: dispatch each registered worker via OneTimeWorkRequest for testing.
-            return BridgeResponse.success(
-                mapOf<String, Any>(
-                    "success" to true,
-                    "message" to "RunNow dispatched (testing only)."
+            return try {
+                val tasks = loadTasks(activity)
+                val workManager = WorkManager.getInstance(activity)
+
+                tasks.forEach { task ->
+                    val request = OneTimeWorkRequestBuilder<BackgroundTasksWorker>()
+                        .addTag(TASK_TAG)
+                        .addTag(task.id)
+                        .setInputData(inputData(task))
+                        .build()
+
+                    workManager.enqueueUniqueWork(
+                        task.id + RUN_NOW_SUFFIX,
+                        ExistingWorkPolicy.REPLACE,
+                        request
+                    )
+                }
+                android.util.Log.i("BackgroundTasks", "Dispatched ${tasks.size} background task(s) for immediate execution")
+
+                BridgeResponse.success(
+                    mapOf<String, Any>(
+                        "success" to true,
+                        "triggered" to tasks.size,
+                        "message" to "RunNow dispatched (testing only)."
+                    )
                 )
-            )
+            } catch (e: Exception) {
+                BridgeResponse.error(
+                    makeError("BG_TASKS_RUN_NOW_ERROR", e.message ?: "Failed to dispatch background tasks.")
+                )
+            }
         }
     }
 
@@ -121,6 +244,8 @@ class BackgroundTasksPlugin {
                     )
 
                 WorkManager.getInstance(activity).cancelUniqueWork(taskId)
+                WorkManager.getInstance(activity).cancelUniqueWork(taskId + RUN_NOW_SUFFIX)
+                removeTask(activity, taskId)
 
                 BridgeResponse.success(
                     mapOf<String, Any>(
@@ -140,12 +265,15 @@ class BackgroundTasksPlugin {
         override fun execute(parameters: Map<String, Any>): Map<String, Any> {
             return try {
                 val workManager = WorkManager.getInstance(activity)
-                val infos = workManager.getWorkInfosByTag("com.projectmata.task").get()
+                val states = workManager.getWorkInfosByTag(TASK_TAG).get()
+                    .groupBy { info -> info.tags.firstOrNull { tag -> tag.startsWith("com.projectmata.task.") } }
 
-                val tasks = infos.map { info ->
+                val tasks = loadTasks(activity).map { task ->
+                    val state = states[task.id]?.firstOrNull()?.state?.name ?: "NOT_SCHEDULED"
                     mapOf<String, Any>(
-                        "id" to info.tags.firstOrNull { it.startsWith("com.projectmata.task") }.orEmpty(),
-                        "state" to info.state.name
+                        "id" to task.id,
+                        "command" to task.command,
+                        "state" to state
                     )
                 }
 
@@ -165,9 +293,7 @@ class BackgroundTasksPlugin {
 }
 
 /**
- * Stub worker — replace with the real implementation in your host app.
- * It must know how to invoke a Laravel artisan command on the embedded
- * NativePHP runtime and respect the `command` / `taskId` input data.
+ * Executes a bundled artisan command from WorkManager, including cold starts.
  */
 class BackgroundTasksWorker(
     appContext: android.content.Context,
@@ -176,7 +302,36 @@ class BackgroundTasksWorker(
 
     override fun doWork(): Result {
         val command = inputData.getString("command") ?: return Result.failure()
-        // TODO: invoke `php artisan $command` against the bundled PHP runtime.
-        return Result.success()
+        val taskId = inputData.getString("taskId") ?: return Result.failure()
+
+        return try {
+            android.util.Log.i("BackgroundTasks", "Starting background task $taskId: $command")
+            LaravelEnvironment(applicationContext).initializeForBackground()
+            val bridge = PHPBridge(applicationContext)
+            val bootstrapPath = "${bridge.getLaravelPath()}/vendor/nativephp/mobile/bootstrap/android/persistent.php"
+
+            if (bridge.nativeEphemeralBoot(bootstrapPath) != 0) {
+                android.util.Log.e("BackgroundTasks", "Failed to boot PHP for background task $taskId")
+                return Result.retry()
+            }
+
+            val output = bridge.nativeEphemeralArtisan(command)
+            if (output.contains("Ephemeral artisan error:")) {
+                android.util.Log.e("BackgroundTasks", "Background task $taskId failed: $output")
+                Result.retry()
+            } else {
+                android.util.Log.i("BackgroundTasks", "Completed background task $taskId: $output")
+                Result.success()
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("BackgroundTasks", "Background task $taskId failed", e)
+            Result.retry()
+        } finally {
+            try {
+                PHPBridge(applicationContext).nativeEphemeralShutdown()
+            } catch (e: Exception) {
+                android.util.Log.e("BackgroundTasks", "Failed to shut down background task $taskId", e)
+            }
+        }
     }
 }

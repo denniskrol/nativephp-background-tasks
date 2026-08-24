@@ -68,7 +68,10 @@ class TaskCollector
             return null;
         }
 
-        if (preg_match("/'artisan'\s+(.+)$/", $command, $matches)) {
+        // Laravel stores scheduled Artisan commands as a shell command, e.g.
+        // `'/path/to/php' '/path/to/artisan' app:update-time`. Extract the
+        // portion Artisan receives rather than returning that shell wrapper.
+        if (preg_match('/(?:^|\s)(?:\'[^\']*artisan\'|"[^"]*artisan"|\S*artisan)\s+(.+)$/', $command, $matches)) {
             return trim($matches[1], "'\" ");
         }
 
