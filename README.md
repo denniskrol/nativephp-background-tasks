@@ -54,7 +54,7 @@ Schedule::command('export:reports')
     ->longRunning();
 ```
 
-After defining tasks, call the PHP API from code running in the mobile app to push them to Android:
+Tasks are registered automatically when the NativePHP app runtime starts. You can also register them manually from code running in the mobile app:
 
 ```php
 use Projectmata\MobileBackgroundTasks\Facades\BackgroundTasks;
@@ -62,7 +62,7 @@ use Projectmata\MobileBackgroundTasks\Facades\BackgroundTasks;
 BackgroundTasks::register();
 ```
 
-This walks the schedule, serialises each periodic event into a task descriptor, and calls the `BackgroundTasks.Register` bridge function. Registration is explicit for now; invoke it after changing scheduled tasks, for example from your app's first native screen. The `projectmata:background-tasks:register` command cannot register Android work from the development machine.
+This walks the schedule, serialises each periodic event into a task descriptor, and calls the `BackgroundTasks.Register` bridge function. The package automatically does this on each normal app start, adding, updating, and removing Android work as the schedule changes. It deliberately skips the ephemeral PHP runtime used to execute a background task.
 
 ## Constraint methods
 
