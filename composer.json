@@ -1,17 +1,17 @@
 {
-  "name": "projectmata/mobile-background-tasks",
+  "name": "denniskrol/nativephp-background-tasks",
   "description": "Background task scheduling plugin for NativePHP Mobile — wraps Laravel's scheduler and runs tasks via WorkManager (Android) and BGTaskScheduler (iOS).",
   "type": "nativephp-plugin",
   "license": "MIT",
   "autoload": {
     "psr-4": {
-      "Projectmata\\MobileBackgroundTasks\\": "src/"
+      "Denniskrol\\NativePHPBackgroundTasks\\": "src/"
     }
   },
   "extra": {
     "laravel": {
       "providers": [
-        "Projectmata\\MobileBackgroundTasks\\MobileBackgroundTasksServiceProvider"
+        "Denniskrol\\NativePHPBackgroundTasks\\NativePHPBackgroundTasksServiceProvider"
       ]
     },
     "nativephp": {

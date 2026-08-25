@@ -10,7 +10,7 @@ import BackgroundTasks
 
  NOTE: iOS only allows task identifiers that are listed in
  `Info.plist > BGTaskSchedulerPermittedIdentifiers`. This plugin's
- `nativephp.json` declares `com.projectmata.task.*` as the allowed prefix.
+ `nativephp.json` declares `com.denniskrol.nativephp.task.*` as the allowed prefix.
  */
 @objc(BackgroundTasksPlugin)
 class BackgroundTasksPlugin: NSObject {

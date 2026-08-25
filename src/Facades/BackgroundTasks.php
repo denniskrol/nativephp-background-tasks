@@ -1,6 +1,6 @@
 <?php
 
-namespace Projectmata\MobileBackgroundTasks\Facades;
+namespace Denniskrol\NativePHPBackgroundTasks\Facades;
 
 use Illuminate\Support\Facades\Facade;
 
@@ -15,6 +15,6 @@ class BackgroundTasks extends Facade
 {
     protected static function getFacadeAccessor(): string
     {
-        return 'mobile-background-tasks';
+        return 'nativephp-background-tasks';
     }
 }

@@ -1,4 +1,4 @@
-package com.projectmata.mobilebackgroundtasks
+package com.denniskrol.nativephpbackgroundtasks
 
 import androidx.fragment.app.FragmentActivity
 import androidx.work.Constraints
@@ -28,8 +28,8 @@ import java.util.concurrent.TimeUnit
 class BackgroundTasksPlugin {
 
     companion object {
-        private const val TASK_TAG = "com.projectmata.mobilebackgroundtasks"
-        private const val PREFERENCES = "com.projectmata.mobilebackgroundtasks.tasks"
+        private const val TASK_TAG = "com.denniskrol.nativephpbackgroundtasks"
+        private const val PREFERENCES = "com.denniskrol.nativephpbackgroundtasks.tasks"
         private const val TASKS_KEY = "tasks"
         private const val RUN_NOW_SUFFIX = ".run-now"
         private val taskIdPattern = Regex("[A-Za-z0-9._-]+")
@@ -104,6 +104,16 @@ class BackgroundTasksPlugin {
             }
         }
 
+        private fun jsonMap(objectValue: JSONObject?): Map<String, Any?> = buildMap {
+            objectValue?.let { json ->
+                val keys = json.keys()
+                while (keys.hasNext()) {
+                    val key = keys.next()
+                    put(key, json.opt(key))
+                }
+            }
+        }
+
         private fun inputData(task: Task) = workDataOf("command" to task.command, "taskId" to task.id)
 
         private fun loadTasks(context: android.content.Context): List<Task> {
@@ -120,7 +130,7 @@ class BackgroundTasksPlugin {
                         val command = objectTask.optString("command")
                         val interval = objectTask.optLong("intervalMinutes")
                         if (taskIdPattern.matches(id) && command.isNotBlank() && interval >= 15) {
-                            add(Task(id, command, interval, emptyMap()))
+                            add(Task(id, command, interval, jsonMap(objectTask.optJSONObject("constraints"))))
                         }
                     }
                 }
@@ -136,6 +146,7 @@ class BackgroundTasksPlugin {
                     put("id", task.id)
                     put("command", task.command)
                     put("intervalMinutes", task.intervalMinutes)
+                    put("constraints", JSONObject(task.constraints))
                 })
             }
 
@@ -158,10 +169,16 @@ class BackgroundTasksPlugin {
                 require(duplicateIds.isEmpty()) { "Task IDs must be unique." }
 
                 val workManager = WorkManager.getInstance(activity)
-                val existingTaskIds = loadTasks(activity).map { it.id }.toSet()
+                val existingTasks = loadTasks(activity)
+                val existingTaskIds = existingTasks.map { it.id }.toSet()
+                val existingTasksById = existingTasks.associateBy { it.id }
                 val registeredTaskIds = tasks.map { it.id }.toSet()
 
                 tasks.forEach { task ->
+                    if (existingTasksById[task.id] == task) {
+                        return@forEach
+                    }
+
                     val request = PeriodicWorkRequestBuilder<BackgroundTasksWorker>(
                         task.intervalMinutes, TimeUnit.MINUTES
                     )
@@ -176,6 +193,7 @@ class BackgroundTasksPlugin {
                         ExistingPeriodicWorkPolicy.UPDATE,
                         request
                     )
+                    android.util.Log.i("BackgroundTasks", "Queued periodic task ${task.id} as ${request.id}")
                 }
 
                 (existingTaskIds - registeredTaskIds).forEach { taskId ->
@@ -266,7 +284,7 @@ class BackgroundTasksPlugin {
             return try {
                 val workManager = WorkManager.getInstance(activity)
                 val states = workManager.getWorkInfosByTag(TASK_TAG).get()
-                    .groupBy { info -> info.tags.firstOrNull { tag -> tag.startsWith("com.projectmata.task.") } }
+                    .groupBy { info -> info.tags.firstOrNull { tag -> tag.startsWith("com.denniskrol.nativephp.task.") } }
 
                 val tasks = loadTasks(activity).map { task ->
                     val state = states[task.id]?.firstOrNull()?.state?.name ?: "NOT_SCHEDULED"
@@ -301,8 +319,15 @@ class BackgroundTasksWorker(
 ) : androidx.work.Worker(appContext, workerParams) {
 
     override fun doWork(): Result {
-        val command = inputData.getString("command") ?: return Result.failure()
-        val taskId = inputData.getString("taskId") ?: return Result.failure()
+        val command = inputData.getString("command")
+        val taskId = inputData.getString("taskId")
+
+        android.util.Log.i("BackgroundTasks", "Worker invoked with taskId=$taskId command=$command")
+
+        if (command == null || taskId == null) {
+            android.util.Log.e("BackgroundTasks", "Background task has missing input data")
+            return Result.failure()
+        }
 
         return try {
             android.util.Log.i("BackgroundTasks", "Starting background task $taskId: $command")

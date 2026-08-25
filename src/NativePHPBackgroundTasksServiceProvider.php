@@ -1,6 +1,6 @@
 <?php
 
-namespace Projectmata\MobileBackgroundTasks;
+namespace Denniskrol\NativePHPBackgroundTasks;
 
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Contracts\Console\Kernel;
@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\ServiceProvider;
 use Native\Mobile\Runtime;
 
-class MobileBackgroundTasksServiceProvider extends ServiceProvider
+class NativePHPBackgroundTasksServiceProvider extends ServiceProvider
 {
     private static bool $registered = false;
 
@@ -16,14 +16,14 @@ class MobileBackgroundTasksServiceProvider extends ServiceProvider
     {
         ScheduleConstraints::register();
 
-        $this->app->singleton('mobile-background-tasks', function ($app) {
+        $this->app->singleton('nativephp-background-tasks', function ($app) {
             return new BackgroundTasksManager(
                 $app->make(Schedule::class),
                 $app->make(Kernel::class),
             );
         });
 
-        $this->app->bind(BackgroundTasksManager::class, fn ($app) => $app->make('mobile-background-tasks'));
+        $this->app->bind(BackgroundTasksManager::class, fn ($app) => $app->make('nativephp-background-tasks'));
     }
 
     public function boot(): void

@@ -1,13 +1,13 @@
 <?php
 
-namespace Projectmata\MobileBackgroundTasks;
+namespace Denniskrol\NativePHPBackgroundTasks;
 
 use Illuminate\Console\Scheduling\Event;
 use Illuminate\Console\Scheduling\Schedule;
 
 class TaskCollector
 {
-    private const INTERVAL_MAP = [
+    private const array INTERVAL_MAP = [
         '*/15 * * * *' => 15,
         '*/20 * * * *' => 20,
         '*/30 * * * *' => 30,
@@ -88,7 +88,7 @@ class TaskCollector
     private function makeId(string $command): string
     {
         $slug = preg_replace('/[^a-z0-9]+/i', '_', $command);
-        return 'com.projectmata.task.' . strtolower(trim($slug, '_'));
+        return 'com.denniskrol.nativephp.task.' . strtolower(trim($slug, '_'));
     }
 
     private function normaliseConstraints(array $raw): array

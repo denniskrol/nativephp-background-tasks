@@ -1,6 +1,6 @@
 <?php
 
-namespace Projectmata\MobileBackgroundTasks;
+namespace Denniskrol\NativePHPBackgroundTasks;
 
 use Illuminate\Console\Scheduling\Event;
 

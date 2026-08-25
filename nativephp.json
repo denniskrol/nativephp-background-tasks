@@ -1,26 +1,26 @@
 {
-  "name": "projectmata/mobile-background-tasks",
-  "display_name": "Projectmata Background Tasks",
+  "name": "denniskrol/nativephp-background-tasks",
+  "display_name": "NativePHP Background Tasks",
   "namespace": "BackgroundTasks",
   "bridge_functions": [
     {
       "name": "BackgroundTasks.Register",
-      "android": "com.projectmata.mobilebackgroundtasks.BackgroundTasksPlugin.Register",
+      "android": "com.denniskrol.nativephpbackgroundtasks.BackgroundTasksPlugin.Register",
       "ios": "BackgroundTasksPlugin.Register"
     },
     {
       "name": "BackgroundTasks.RunNow",
-      "android": "com.projectmata.mobilebackgroundtasks.BackgroundTasksPlugin.RunNow",
+      "android": "com.denniskrol.nativephpbackgroundtasks.BackgroundTasksPlugin.RunNow",
       "ios": "BackgroundTasksPlugin.RunNow"
     },
     {
       "name": "BackgroundTasks.Cancel",
-      "android": "com.projectmata.mobilebackgroundtasks.BackgroundTasksPlugin.Cancel",
+      "android": "com.denniskrol.nativephpbackgroundtasks.BackgroundTasksPlugin.Cancel",
       "ios": "BackgroundTasksPlugin.Cancel"
     },
     {
       "name": "BackgroundTasks.GetRegistered",
-      "android": "com.projectmata.mobilebackgroundtasks.BackgroundTasksPlugin.GetRegistered",
+      "android": "com.denniskrol.nativephpbackgroundtasks.BackgroundTasksPlugin.GetRegistered",
       "ios": "BackgroundTasksPlugin.GetRegistered"
     }
   ],
@@ -39,7 +39,7 @@
     "min_version": "16.0",
     "info_plist": {
       "BGTaskSchedulerPermittedIdentifiers": [
-        "com.projectmata.task.*"
+        "com.denniskrol.nativephp.task.*"
       ],
       "UIBackgroundModes": [
         "fetch",

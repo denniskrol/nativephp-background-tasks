@@ -1,8 +1,8 @@
-# Projectmata Mobile Background Tasks
+# NativePHP Background Tasks
 
-[![Latest Version](https://img.shields.io/packagist/v/projectmata/mobile-background-tasks.svg)](https://packagist.org/packages/projectmata/mobile-background-tasks)
-[![Total Downloads](https://img.shields.io/packagist/dt/projectmata/mobile-background-tasks.svg)](https://packagist.org/packages/projectmata/mobile-background-tasks)
-[![License](https://img.shields.io/packagist/l/projectmata/mobile-background-tasks.svg)](https://packagist.org/packages/projectmata/mobile-background-tasks)
+[![Latest Version](https://img.shields.io/packagist/v/denniskrol/nativephp-background-tasks.svg)](https://packagist.org/packages/denniskrol/nativephp-background-tasks)
+[![Total Downloads](https://img.shields.io/packagist/dt/denniskrol/nativephp-background-tasks.svg)](https://packagist.org/packages/denniskrol/nativephp-background-tasks)
+[![License](https://img.shields.io/packagist/l/denniskrol/nativephp-background-tasks.svg)](https://packagist.org/packages/denniskrol/nativephp-background-tasks)
 
 Background task scheduling plugin for [NativePHP Mobile](https://nativephp.com). Lets you define recurring jobs with Laravel's standard scheduler and run them via Android **WorkManager** and iOS **BGTaskScheduler** — even when the app is backgrounded or killed.
 
@@ -19,7 +19,7 @@ Background task scheduling plugin for [NativePHP Mobile](https://nativephp.com).
 ## Installation
 
 ```bash
-composer require projectmata/mobile-background-tasks
+composer require denniskrol/nativephp-background-tasks
 ```
 
 Enable the package in your app's `NativeServiceProvider::plugins()` list, then rebuild the mobile app:
@@ -57,7 +57,7 @@ Schedule::command('export:reports')
 Tasks are registered automatically when the NativePHP app runtime starts. You can also register them manually from code running in the mobile app:
 
 ```php
-use Projectmata\MobileBackgroundTasks\Facades\BackgroundTasks;
+use Denniskrol\NativePHPBackgroundTasks\Facades\BackgroundTasks;
 
 BackgroundTasks::register();
 ```
@@ -85,7 +85,7 @@ Other Laravel scheduler frequencies are ignored by the collector — both Androi
 ## PHP API
 
 ```php
-use Projectmata\MobileBackgroundTasks\Facades\BackgroundTasks;
+use Denniskrol\NativePHPBackgroundTasks\Facades\BackgroundTasks;
 
 // Push the current schedule to the OS scheduler
 BackgroundTasks::register();
@@ -94,7 +94,7 @@ BackgroundTasks::register();
 BackgroundTasks::runNow();
 
 // Cancel a single task
-BackgroundTasks::cancel('com.projectmata.task.sync_data');
+BackgroundTasks::cancel('com.denniskrol.nativephp.task.sync_data');
 
 // Inspect what's scheduled
 $registered = BackgroundTasks::getRegistered();
@@ -108,7 +108,7 @@ $tasks = BackgroundTasks::tasks();
 ```js
 await window.NativePHP.BackgroundTasks.Register({ tasks: [...] });
 await window.NativePHP.BackgroundTasks.RunNow();
-await window.NativePHP.BackgroundTasks.Cancel({ taskId: 'com.projectmata.task.sync_data' });
+await window.NativePHP.BackgroundTasks.Cancel({ taskId: 'com.denniskrol.nativephp.task.sync_data' });
 const { tasks } = await window.NativePHP.BackgroundTasks.GetRegistered();
 ```
 
@@ -125,7 +125,7 @@ const { tasks } = await window.NativePHP.BackgroundTasks.GetRegistered();
 
 ```ts
 {
-    id: 'com.projectmata.task.sync_data',
+    id: 'com.denniskrol.nativephp.task.sync_data',
     command: 'sync:data',
     intervalMinutes: 15,
     constraints: {
@@ -149,12 +149,12 @@ This package declares `androidx.work:work-runtime-ktx:2.9.1`. The `Register` bri
 
 ### iOS
 
-`BGTaskScheduler` requires every task identifier to be listed in `Info.plist > BGTaskSchedulerPermittedIdentifiers`. The plugin declares the `com.projectmata.task.*` prefix; iOS will reject any identifier outside that prefix.
+`BGTaskScheduler` requires every task identifier to be listed in `Info.plist > BGTaskSchedulerPermittedIdentifiers`. The plugin declares the `com.denniskrol.nativephp.task.*` prefix; iOS will reject any identifier outside that prefix.
 
 You must register a handler in your `AppDelegate` (or SwiftUI App) for each identifier you submit:
 
 ```swift
-BGTaskScheduler.shared.register(forTaskWithIdentifier: "com.projectmata.task.sync_data", using: nil) { task in
+BGTaskScheduler.shared.register(forTaskWithIdentifier: "com.denniskrol.nativephp.task.sync_data", using: nil) { task in
     // run the sync:data artisan command, then call task.setTaskCompleted(success: ...)
 }
 ```
@@ -172,7 +172,7 @@ adb shell cmd jobscheduler run -f <your.app.bundle> <job-id>
 **iOS (Xcode LLDB):**
 
 ```
-e -l objc -- (void)[[BGTaskScheduler sharedScheduler] _simulateLaunchForTaskWithIdentifier:@"com.projectmata.task.sync_data"]
+e -l objc -- (void)[[BGTaskScheduler sharedScheduler] _simulateLaunchForTaskWithIdentifier:@"com.denniskrol.nativephp.task.sync_data"]
 ```
 
 Or just call `BackgroundTasks::runNow()` from PHP — it bypasses constraints and is intended for development only.

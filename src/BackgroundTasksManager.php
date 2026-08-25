@@ -1,6 +1,6 @@
 <?php
 
-namespace Projectmata\MobileBackgroundTasks;
+namespace Denniskrol\NativePHPBackgroundTasks;
 
 use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Console\Scheduling\Schedule;
@@ -57,7 +57,7 @@ class BackgroundTasksManager
             require_once $consoleRoutes;
         }
 
-        return (new TaskCollector($this->schedule))->collect();
+        return new TaskCollector($this->schedule)->collect();
     }
 
     protected function callNative(string $method, array $params = []): mixed
