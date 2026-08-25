@@ -331,6 +331,8 @@ class BackgroundTasksWorker(
 
         return try {
             android.util.Log.i("BackgroundTasks", "Starting background task $taskId: $command")
+            // WorkManager has no activity, so register only context-safe plugin bridges.
+            com.nativephp.mobile.bridge.plugins.registerContextOnlyBridgeFunctions(applicationContext)
             LaravelEnvironment(applicationContext).initializeForBackground()
             val bridge = PHPBridge(applicationContext)
             val bootstrapPath = "${bridge.getLaravelPath()}/vendor/nativephp/mobile/bootstrap/android/persistent.php"
